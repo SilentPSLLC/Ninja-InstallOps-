@@ -1,0 +1,116 @@
+<#
+.SYNOPSIS
+    InstallOps - Advanced IP Scanner
+    
+.DESCRIPTION
+    This script, authored by SilentPS Team, downloads Rainmeter from the hardcoded URL, stores it in a custom folder structure, and installs or uninstalls the application based on the provided parameters.
+    
+.NOTES
+    Author: Christopher Sparrowgrove
+    Date: 14 May 2023
+    Version: 1.0
+    License: GNU General Public License v3.0
+    
+.LINK
+    https://github.com/SilentPSLLC/Ninja-InstallOps
+    
+.PARAMETER DeploymentType
+    Specifies whether to Install or Uninstall the application.
+    
+.PARAMETER DeployMode
+    Specifies the installation mode: Interactive, Silent, or NonInteractive.
+    
+.EXAMPLE
+    .\InstallOps - Advanced IP Scanner.ps1 -DeploymentType "Install" -DeployMode "NonInteractive"
+    .\InstallOps - Advanced IP Scanner.ps1 -DeploymentType "Install" -DeployMode "Interactive"
+    .\InstallOps - Advanced IP Scanner.ps1 -DeploymentType "Install" -DeployMode "Silent"
+    .\InstallOps - Advanced IP Scanner.ps1 -DeploymentType "Uninstall" -DeployMode "NonInteractive"
+    .\InstallOps - Advanced IP Scanner.ps1 -DeploymentType "Uninstall" -DeployMode "Interactive"
+    .\InstallOps - Advanced IP Scanner.ps1 -DeploymentType "Uninstall" -DeployMode "Silent"
+#>
+
+[CmdletBinding()]
+Param (
+    [Parameter(Mandatory=$true)]
+    [ValidateSet('Install','Uninstall')]
+    [string]$DeploymentType,
+
+    [Parameter(Mandatory=$true)]
+    [ValidateSet('Interactive','Silent','NonInteractive')]
+    [string]$DeployMode
+)
+
+# Variables
+$softwareName = "FamaTech_Advanced_IP_Scanner"
+$downloadURL = "https://download.advanced-ip-scanner.com/download/files/Advanced_IP_Scanner_2.5.4594.1.exe"
+$baseFolder = "C:\ProgramData\InstallOps\downloaded"
+$softwareFolder = Join-Path -Path $baseFolder -ChildPath $softwareName
+$installerPath = Join-Path -Path $softwareFolder -ChildPath "Advanced_IP_Scanner_2.5.4594.1.exe"
+$logFolder = $softwareFolder
+$logFile = Join-Path -Path $logFolder -ChildPath ("Install_Log_" + (Get-Date -Format "yyyy-MM-dd_HH-mm-ss") + ".log")
+
+# Ensure the directory structure exists
+If (-Not (Test-Path $softwareFolder)) {
+    New-Item -Path $softwareFolder -ItemType Directory -Force
+}
+
+# Function to write logs
+Function Write-Log {
+    Param (
+        [string]$Message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - $Message"
+    Add-Content -Path $logFile -Value $logMessage
+    Write-Host $logMessage
+}
+
+# Check if the software is already installed
+Function Is-SoftwareInstalled {
+    $installed = Get-WmiObject -Class Win32_Product -Filter "Name = 'Advanced IP Scanner'" -ErrorAction SilentlyContinue
+    Return $installed -ne $null
+}
+
+# Download the installer if it doesn't exist
+If (-Not (Test-Path $installerPath)) {
+    Write-Log "Downloading Advanced IP Scanner..."
+    Invoke-WebRequest -Uri $downloadURL -OutFile $installerPath -ErrorAction Stop
+    Write-Log "Download completed: $installerPath"
+} Else {
+    Write-Log "Installer already exists: $installerPath"
+}
+
+# Installation or Uninstallation process
+If ($DeploymentType -eq "Install") {
+    If (Is-SoftwareInstalled) {
+        Write-Log "Advanced IP Scanner is already installed. Exiting."
+        Exit 0
+    }
+
+    Write-Log "Starting installation of Advanced IP Scanner..."
+    $installParams = ""
+
+    Switch ($DeployMode) {
+        "Interactive" { $installParams = "" }
+        "Silent" { $installParams = "/SILENT" }
+        "NonInteractive" { $installParams = "/VERYSILENT" }
+    }
+
+    Start-Process -FilePath $installerPath -ArgumentList $installParams -Wait
+    Write-Log "Installation completed."
+}
+ElseIf ($DeploymentType -eq "Uninstall") {
+    If (-Not (Is-SoftwareInstalled)) {
+        Write-Log "Advanced IP Scanner is not installed. Exiting."
+        Exit 0
+    }
+
+    Write-Log "Starting uninstallation of Advanced IP Scanner..."
+    $uninstallString = (Get-WmiObject -Class Win32_Product -Filter "Name = 'Advanced IP Scanner'").IdentifyingNumber
+    $uninstallParams = "/x $uninstallString /quiet"
+
+    Start-Process -FilePath "msiexec.exe" -ArgumentList $uninstallParams -Wait
+    Write-Log "Uninstallation completed."
+}
+
+Write-Log "$DeploymentType operation for Advanced IP Scanner completed successfully."
